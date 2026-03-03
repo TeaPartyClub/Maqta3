@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مقطع · Maqta3 — Arabic Reels Generator</title>
+  <link rel="stylesheet" href="Maqta3Style.css">
+
+
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────────────── -->
+<header>
+  <div class="logo">Maqta3</div>
+  <div class="logo-sub">مقطع · Arabic Reels Generator</div>
+</header>
+
+<!-- ─── Main ───────────────────────────────────── -->
+<main>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Turn Any Video Into<br><span>Arabic Reels</span></h1>
+    <p>Auto-extract highlights · Vertical 9:16 format · Burned-in Arabic subtitles<br>English → Arabic voiceover (Saudi dialect)</p>
+    <div class="feature-pills">
+      <span class="pill">🎙 Whisper Transcription</span>
+      <span class="pill">✂️ Smart Highlight Scoring</span>
+      <span class="pill">🇸🇦 Saudi TTS</span>
+      <span class="pill">📱 9:16 Output</span>
+    </div>
+  </div>
+
+  <!-- Input Card -->
+  <div class="card" id="input-section">
+
+    <!-- Tabs -->
+    <div class="tab-group">
+      <button class="tab-btn active" id="tab-url"    onclick="switchTab('url')">🔗  YouTube URL</button>
+      <button class="tab-btn"        id="tab-upload" onclick="switchTab('upload')">📁  Upload Video</button>
+    </div>
+
+    <!-- URL panel -->
+    <div id="panel-url">
+      <input type="text" class="input-field" id="yt-url"
+             placeholder="https://www.youtube.com/watch?v=..."
+             autocomplete="off" spellcheck="false">
+    </div>
+
+    <!-- Upload panel -->
+    <div id="panel-upload" class="hidden">
+      <div class="drop-zone" id="drop-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="drop-icon">🎬</div>
+        <p><strong>Click to choose a file</strong> or drag & drop here</p>
+        <p>MP4 · MOV · AVI &nbsp;|&nbsp; Max 30 min</p>
+      </div>
+      <input type="file" id="file-input" accept="video/*" onchange="onFileSelect(event)">
+      <div id="file-name"></div>
+    </div>
+
+    <!-- Clip count picker -->
+    <div class="clip-picker">
+      <div class="clip-picker-label">Number of highlights</div>
+      <div class="clip-picker-btns">
+        <button class="clip-btn" onclick="selectClips(1)">1</button>
+        <button class="clip-btn" onclick="selectClips(2)">2</button>
+        <button class="clip-btn" onclick="selectClips(3)">3</button>
+        <button class="clip-btn" onclick="selectClips(4)">4</button>
+        <button class="clip-btn selected" onclick="selectClips(5)">5</button>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <button class="submit-btn" id="submit-btn" onclick="submitJob()">
+      ✦ &nbsp; Generate Arabic Highlights
+    </button>
+    <p class="processing-note">Processing takes 3–8 minutes · First run downloads AI models (~2 GB)</p>
+  </div>
+
+  <!-- Status Card -->
+  <div class="card" id="status-section">
+    <div class="section-title" id="status-title">Processing…</div>
+
+    <div class="progress-track">
+      <div class="progress-fill" id="prog-bar"></div>
+    </div>
+
+    <div class="stage-list" id="stage-list"></div>
+    <div class="error-box" id="err-box"></div>
+  </div>
+
+  <!-- Results -->
+  <div id="results-section">
+    <div class="section-title">
+      Highlights Ready
+      <span class="count-badge" id="clip-count">0</span>
+    </div>
+    <div class="results-grid" id="results-grid"></div>
+    <div class="reset-wrap">
+      <button class="reset-btn" onclick="resetUI()">+ Process Another Video</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ─── JavaScript ──────────────────────────────── -->
+
+<script src="Maqta3Script.js"></script>
+</body>
+</html>
