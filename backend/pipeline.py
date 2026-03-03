@@ -629,7 +629,7 @@ class VideoProcessor:
         _run([
             "ffmpeg", "-y",
             "-i",   str(video),
-            "-vf",  f"ass={ass.name}",
+            "-vf",  f"ass=filename={ass.name}",
             "-c:v", "libx264", "-preset", "fast",
             "-c:a", "copy",
             str(output),
