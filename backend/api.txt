@@ -1,0 +1,37 @@
+Loaded as API: https://omarelshehy-namaa-saudi-voice.hf.space
+Client.predict() Usage Info
+---------------------------
+Named API endpoints: 3
+
+ - predict(api_name="/pick_random_saudi_example") -> النص_لهجة_سعودية
+    Parameters:
+     - None
+    Returns:
+     - [Textbox] النص_لهجة_سعودية: str 
+
+ - predict(api_name="/lambda") -> النص_لهجة_سعودية
+    Parameters:
+     - None
+    Returns:
+     - [Textbox] النص_لهجة_سعودية: str 
+
+ - predict(text_input, audio_prompt_path_input, exaggeration_input, temperature_input, seed_num_input, cfgw_input, api_name="/generate_tts_audio") -> الصوت_الناتج
+    Parameters:
+     - [Textbox] text_input: str (not required, defaults to:   آبي أروح البقالة أشتري كم غرض وأرجع بسرعة.)  
+     - [Audio] audio_prompt_path_input: filepath (not required, defaults to:   handle_file("https://github.com/gradio-app/gradio/raw/main/test/test_files/audio_sample.wav"))  (The FileData class is a subclass of the GradioModel class that represents a file object within a Gradio interface. It is used to store file data and metadata when a file is uploaded.
+
+Attributes:
+    path: The server file path where the file is stored.
+    url: The normalized server URL pointing to the file.
+    size: The size of the file in bytes.
+    orig_name: The original filename before upload.
+    mime_type: The MIME type of the file.
+    is_stream: Indicates whether the file is a stream.
+    meta: Additional metadata used internally (should not be changed).) 
+     - [Slider] exaggeration_input: float (not required, defaults to:   0.5)  
+     - [Slider] temperature_input: float (not required, defaults to:   0.8)  
+     - [Number] seed_num_input: float (not required, defaults to:   0)  
+     - [Slider] cfgw_input: float (not required, defaults to:   0.5)  
+    Returns:
+     - [Audio] الصوت_الناتج: filepath 
+

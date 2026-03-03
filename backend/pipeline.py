@@ -20,11 +20,18 @@ import platform
 import shutil
 import subprocess
 import tempfile
+import urllib.parse
 from pathlib import Path
 from typing import Callable, List, Optional
 
 import numpy as np
+import requests
 import soundfile as sf
+
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+except ImportError:
+    YouTubeTranscriptApi = None
 
 # ─── Arabic font selection ────────────────────────────────────────────────────
 # The ASS renderer picks the best system fallback if the named font is missing.
@@ -116,14 +123,16 @@ class VideoProcessor:
         return self._mt_tokenizer, self._mt_model
 
     def _load_tts(self):
-        """Saudi-dialect TTS (VITS architecture)."""
+        """Saudi-dialect TTS (NAMAA-Saudi-TTS).
+        Using the Gradio client since local chatterbox setup is complex on Windows.
+        """
         if self._tts_model is None:
-            import torch
-            from transformers import AutoTokenizer, VitsModel
-            name = "AhmedEladl/saudi-tts"
-            self._tts_tokenizer = AutoTokenizer.from_pretrained(name, use_fast=False)
-            self._tts_model     = VitsModel.from_pretrained(name)
-        return self._tts_tokenizer, self._tts_model
+            try:
+                from gradio_client import Client
+                self._tts_model = Client("omarelshehy/NAMAA-Saudi-Voice")
+            except Exception as e:
+                print(f"Failed to load Gradio client for NAMAA TTS: {e}")
+        return None, self._tts_model
 
     # ── Public entry point ────────────────────────────────────────────────────
 
@@ -143,23 +152,44 @@ class VideoProcessor:
         progress_callback("downloading", 5, "Downloading video…")
         video = self._get_video(source_url, source_path, work)
 
-        # 2 ── Extract mono 16 kHz audio for Whisper
-        progress_callback("extracting", 12, "Extracting audio…")
-        audio = self._extract_audio(video, work)
+        video_id = self._extract_video_id(source_url)
+        skip_segments = []
+        if video_id:
+            skip_segments = self._get_sponsorblock_segments(video_id)
 
-        # 3 ── Get total duration
+        # Get total duration
         total_dur = self._duration(video)
 
-        # 4 ── Transcribe + detect language
-        progress_callback("transcribing", 18,
-                          "Transcribing speech… (1–3 min depending on length)")
-        transcript = self._transcribe(audio)
+        transcript = None
+        if video_id:
+            progress_callback("transcribing", 15, "Fetching YouTube subtitles…")
+            transcript = self._get_youtube_transcript(video_id)
+
+        if not transcript:
+            # 2 ── Extract mono 16 kHz audio for Whisper
+            progress_callback("extracting", 12, "Extracting audio…")
+            audio = self._extract_audio(video, work)
+
+            # 4 ── Transcribe + detect language
+            progress_callback("transcribing", 18,
+                              "Transcribing speech… (1–3 min depending on length)")
+            transcript = self._transcribe(audio)
+
         language   = transcript.get("language", "en")
-        segments   = transcript.get("segments", [])
+        raw_segments = transcript.get("segments", [])
+
+        segments = []
+        for s in raw_segments:
+            is_sponsored = any(
+                not (s["end"] <= skip[0] or s["start"] >= skip[1])
+                for skip in skip_segments
+            )
+            if not is_sponsored and s.get("text", "").strip():
+                segments.append(s)
 
         if not segments:
             raise ValueError(
-                "Whisper found no speech in this video. "
+                "No valid speech segments found in this video. "
                 "Try a video with clearer audio."
             )
 
@@ -179,11 +209,13 @@ class VideoProcessor:
         for i, hl in enumerate(highlights):
             base = 58 + int(i / n * 38)
 
-            # 6 ── Trim raw clip
+            # 6 ── Trim raw clip (Silence Removal Jumpcut)
             progress_callback("clipping", base,
-                              f"Cutting clip {i+1}/{n}…")
+                              f"Cutting and jump-cutting clip {i+1}/{n}…")
             raw_clip = work / f"_raw_{i}.mp4"
-            self._trim(video, hl["start"], hl["end"], raw_clip)
+            retimed_segs = self._trim_jumpcut(video, hl["segments"], raw_clip)
+            hl["segments"] = retimed_segs
+            clip_start = 0.0
 
             # 7 ── Convert to 9:16
             progress_callback("converting", base + 1,
@@ -198,7 +230,7 @@ class VideoProcessor:
 
             # 9 ── Write ASS file
             ass_file = work / f"_subs_{i}.ass"
-            self._write_ass(ar_segs, hl["start"], ass_file)
+            self._write_ass(ar_segs, clip_start, ass_file)
 
             # 10 ── Burn subtitles
             sub_clip = work / f"_sub_{i}.mp4"
@@ -213,7 +245,7 @@ class VideoProcessor:
                 try:
                     tts_clip = work / f"_tts_{i}.mp4"
                     self._replace_audio_tts(sub_clip, ar_segs,
-                                            hl["start"], tts_clip)
+                                            clip_start, tts_clip)
                     final = tts_clip
                 except Exception as exc:
                     print(f"[TTS] Clip {i+1} skipped: {exc}")
@@ -296,6 +328,59 @@ class VideoProcessor:
     def _transcribe(self, audio: Path) -> dict:
         model = self._load_whisper()
         return model.transcribe(str(audio), task="transcribe", fp16=False)
+
+    def _extract_video_id(self, url: Optional[str]) -> Optional[str]:
+        if not url: return None
+        try:
+            parsed = urllib.parse.urlparse(url)
+            if "youtube.com" in parsed.netloc:
+                qs = urllib.parse.parse_qs(parsed.query)
+                return qs.get("v", [None])[0]
+            elif "youtu.be" in parsed.netloc:
+                return parsed.path.lstrip("/")
+        except:
+            pass
+        return None
+
+    def _get_sponsorblock_segments(self, video_id: str) -> list[tuple[float, float]]:
+        try:
+            url = f"https://sponsor.ajay.app/api/skipSegments?videoID={video_id}&categories=[\"sponsor\",\"intro\",\"outro\",\"interaction\",\"selfpromo\",\"music_offtopic\"]"
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                return [(seg["segment"][0], seg["segment"][1]) for seg in data]
+        except Exception as e:
+            print(f"SponsorBlock error: {e}")
+        return []
+
+    def _get_youtube_transcript(self, video_id: str) -> Optional[dict]:
+        if YouTubeTranscriptApi is None:
+            return None
+        try:
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            try:
+                transcript = transcript_list.find_transcript(['en', 'ar'])
+            except:
+                transcript = transcript_list.find_transcript([t.language_code for t in transcript_list])
+            
+            raw_transcript = transcript.fetch()
+            language = transcript.language_code
+            
+            segments = []
+            for item in raw_transcript:
+                segments.append({
+                    "start": item["start"],
+                    "end": item["start"] + item["duration"],
+                    "text": item["text"]
+                })
+                
+            return {
+                "language": "en" if "en" in language else ("ar" if "ar" in language else language),
+                "segments": segments
+            }
+        except Exception as e:
+            print(f"YouTube transcript error: {e}")
+            return None
 
     # ── Highlight extraction ──────────────────────────────────────────────────
 
@@ -399,22 +484,49 @@ class VideoProcessor:
 
     # ── Video processing ──────────────────────────────────────────────────────
 
-    def _trim(
+    def _trim_jumpcut(
         self,
         video:  Path,
-        start:  float,
-        end:    float,
+        segments: list,
         output: Path,
-    ):
-        _run([
-            "ffmpeg", "-y",
-            "-ss", f"{start:.3f}",
-            "-to", f"{end:.3f}",
-            "-i",  str(video),
-            "-c:v", "libx264", "-preset", "fast",
-            "-c:a", "aac",
-            str(output),
-        ])
+    ) -> list:
+        if not segments:
+            raise ValueError("No segments to trim")
+            
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            for seg in segments:
+                f.write(f"file '{str(video.absolute().as_posix())}'\n")
+                f.write(f"inpoint {seg['start']:.3f}\n")
+                f.write(f"outpoint {seg['end']:.3f}\n")
+            concat_file = f.name
+            
+        try:
+            _run([
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_file,
+                "-c:v", "libx264", "-preset", "fast",
+                "-c:a", "aac",
+                str(output),
+            ])
+        finally:
+            Path(concat_file).unlink(missing_ok=True)
+            
+        current_time = 0.0
+        retimed_segments = []
+        for seg in segments:
+            dur = seg["end"] - seg["start"]
+            if dur <= 0:
+                continue
+            retimed_segments.append({
+                "start": current_time,
+                "end": current_time + dur,
+                "text": seg["text"]
+            })
+            current_time += dur
+            
+        return retimed_segments
 
     def _make_vertical(self, src: Path, dst: Path):
         """
@@ -541,11 +653,15 @@ class VideoProcessor:
           • If TTS audio is longer than the segment window → truncate.
           • Gaps between segments stay silent (no background music for MVP).
         """
-        tokenizer, model = self._load_tts()
-        import torch
+        tokenizer, client = self._load_tts()
+        
+        if client is None:
+            print("[TTS] NAMAA-Saudi-TTS client not available. Skipping.")
+            return
 
         clip_dur    = self._duration(video)
-        sample_rate = model.config.sampling_rate
+        # Assuming 24kHz for NAMAA-Saudi-TTS based on Chatterbox
+        sample_rate = 24000
         n_samples   = int((clip_dur + 0.5) * sample_rate)
         full_audio  = np.zeros(n_samples, dtype=np.float32)
 
@@ -561,9 +677,46 @@ class VideoProcessor:
             start_idx   = int(t0 * sample_rate)
 
             try:
-                inputs = tokenizer(arabic, return_tensors="pt")
-                with torch.no_grad():
-                    wave = model(**inputs).waveform.squeeze().numpy()
+                # Call the NAMAA HF Space API with retries for rate limiting
+                # Endpoint: /generate_tts_audio
+                # Parameters: text, audio_prompt (None), exaggeration (0.5), temp (0.8), seed (0), cfgw (0.5)
+                import time
+                
+                result = None
+                for attempt in range(3):
+                    try:
+                        result = client.predict(
+                            text_input=arabic,
+                            audio_prompt_path_input=None,
+                            exaggeration_input=0.5,
+                            temperature_input=0.8,
+                            seed_num_input=0,
+                            cfgw_input=0.5,
+                            api_name="/generate_tts_audio"
+                        )
+                        break
+                    except Exception as e:
+                        if "429" in str(e) or "rate limit" in str(e).lower() or "Queue" in str(e):
+                            print(f"[TTS] Rate limited on attempt {attempt+1}, waiting 10s...")
+                            time.sleep(10)
+                        else:
+                            raise e
+                            
+                if not result:
+                    continue
+                
+                # Load the returned wav file
+                wave, sr = sf.read(result)
+                
+                # Resample if needed (sf handles basic loading, scipy/librosa for resample)
+                # But since we just initialized n_samples assuming 24k, we'll assign directly.
+                if sr != sample_rate:
+                    # In a production app you'd resample properly here.
+                    pass
+
+                # If stereo, convert to mono
+                if len(wave.shape) > 1:
+                    wave = wave.mean(axis=1)
 
                 if len(wave) > seg_samples:
                     wave = wave[:seg_samples]

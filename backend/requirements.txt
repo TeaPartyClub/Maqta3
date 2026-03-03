@@ -6,16 +6,19 @@ aiofiles
 
 # ── Video download ───────────────────────────────────────
 yt-dlp
+youtube-transcript-api
+requests
 
 # ── Speech transcription (Whisper) ──────────────────────
 # Also pulls in torch; use openai-whisper for the official package
 openai-whisper
 
 # ── Machine translation EN→AR  (Helsinki-NLP/opus-mt-en-ar)
-# ── Arabic TTS              (AhmedEladl/saudi-tts — VITS)
+# ── Arabic TTS              (NAMAA-Saudi-TTS via HuggingFace Space)
 transformers
 sentencepiece        # required by MarianMT tokenizer
 sacremoses           # required by MarianMT tokenizer
+gradio_client        # required for NAMAA TTS API calls
 protobuf             # required by TTS model tokenizer
 tiktoken             # required by TTS tokenizer fast backend
 
