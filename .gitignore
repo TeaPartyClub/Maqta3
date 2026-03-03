@@ -1,2 +1,3 @@
 backend/results/
 backend/jobs/
+backend/__pycache__

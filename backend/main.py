@@ -17,6 +17,7 @@ from typing import Optional
 import aiofiles
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 # ─── Directory layout ──────────────────────────────────────────────────────────
 ROOT_DIR     = Path(__file__).parent.parent          # …/Maqta3/
@@ -30,6 +31,7 @@ for _d in (JOBS_DIR, UPLOADS_DIR, RESULTS_DIR):
 
 # ─── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Maqta3", version="0.1.0")
+app.mount("/static", StaticFiles(directory=ROOT_DIR), name="static")
 
 # Lazy-import pipeline so the server starts fast (models load on first job)
 _processor = None
@@ -66,7 +68,7 @@ def patch_job(job_id: str, **kwargs):
 # ─── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    html = ROOT_DIR / "Maqta3-v00001.html"
+    html = ROOT_DIR / "Maqta3.html"
     return html.read_text(encoding="utf-8")
 
 
