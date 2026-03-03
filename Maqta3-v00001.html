@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مقطع · Maqta3 — Arabic Reels Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080810;
+      --surface:   #0f0f1c;
+      --card:      #12121e;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #ff4d1c;
+      --accent2:   #ff8c42;
+      --glow:      rgba(255,77,28,0.25);
+      --text:      #ededf5;
+      --dim:       #6a6a90;
+      --success:   #00c97d;
+      --warn:      #ffb700;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Header ────────────────────────────────────── */
+    header {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo {
+      font-size: 26px;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .logo-sub {
+      font-size: 14px;
+      color: var(--dim);
+    }
+
+    /* ── Layout ─────────────────────────────────────── */
+    main {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 52px 24px 80px;
+    }
+
+    /* ── Hero ────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      margin-bottom: 44px;
+    }
+    .hero h1 {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.18;
+      margin-bottom: 14px;
+      letter-spacing: -0.5px;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 16px;
+      color: var(--dim);
+      line-height: 1.6;
+    }
+    .feature-pills {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--dim);
+    }
+
+    /* ── Card ────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 32px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Tabs ─────────────────────────────────────────── */
+    .tab-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 26px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 11px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dim);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.18s;
+    }
+    .tab-btn.active {
+      background: rgba(255,77,28,0.12);
+      border-color: rgba(255,77,28,0.45);
+      color: var(--text);
+    }
+    .tab-btn:hover:not(.active) {
+      border-color: rgba(255,255,255,0.15);
+      color: var(--text);
+    }
+
+    /* ── URL Input ────────────────────────────────────── */
+    .input-field {
+      width: 100%;
+      padding: 15px 20px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.18s;
+    }
+    .input-field:focus { border-color: var(--accent); }
+    .input-field::placeholder { color: var(--dim); }
+
+    /* ── Drop Zone ─────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 52px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .drop-zone:hover,
+    .drop-zone.active {
+      border-color: var(--accent);
+      background: rgba(255,77,28,0.04);
+    }
+    .drop-icon { font-size: 44px; margin-bottom: 14px; }
+    .drop-zone p { color: var(--dim); font-size: 14px; line-height: 1.7; }
+    .drop-zone strong { color: var(--accent2); }
+    #file-input { display: none; }
+    #file-name {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--success);
+      display: none;
+    }
+
+    /* ── Clip count picker ───────────────────────────────── */
+    .clip-picker {
+      margin-top: 26px;
+    }
+    .clip-picker-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+    .clip-picker-btns {
+      display: flex;
+      gap: 10px;
+    }
+    .clip-btn {
+      flex: 1;
+      padding: 14px 0;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--dim);
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s;
+      line-height: 1;
+    }
+    .clip-btn:hover:not(.selected) {
+      border-color: rgba(255,77,28,0.35);
+      color: var(--text);
+    }
+    .clip-btn.selected {
+      background: rgba(255,77,28,0.15);
+      border-color: var(--accent);
+      color: var(--accent2);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    /* ── Submit ─────────────────────────────────────────── */
+    .submit-btn {
+      width: 100%;
+      padding: 17px;
+      margin-top: 24px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.2px;
+    }
+    .submit-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 28px var(--glow);
+    }
+    .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .processing-note {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--dim);
+    }
+
+    /* ── Status ────────────────────────────────────────── */
+    #status-section { display: none; }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 22px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .count-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      border-radius: 50%;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .progress-track {
+      height: 4px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      transition: width 0.6s ease;
+      width: 0%;
+    }
+
+    /* ── Stage List ─────────────────────────────────────── */
+    .stage-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .stage-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .stage-row.s-active { background: rgba(255,77,28,0.08); }
+    .stage-row.s-done  { background: rgba(0,201,125,0.06); }
+
+    .stage-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.06);
+      color: var(--dim);
+    }
+    .s-active .stage-dot {
+      background: rgba(255,77,28,0.3);
+      color: var(--accent2);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .s-done .stage-dot {
+      background: rgba(0,201,125,0.25);
+      color: var(--success);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.45; }
+    }
+
+    .stage-label { flex: 1; }
+    .s-done  .stage-label { color: var(--dim); text-decoration: line-through; }
+    .s-active .stage-label { color: var(--text); }
+
+    /* ── Error ────────────────────────────────────────── */
+    .error-box {
+      background: rgba(255,60,60,0.1);
+      border: 1px solid rgba(255,60,60,0.3);
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: #ff7070;
+      font-size: 14px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    /* ── Results ─────────────────────────────────────────── */
+    #results-section { display: none; }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+    }
+
+    .clip-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .clip-card:hover { border-color: rgba(255,77,28,0.35); }
+
+    .clip-video {
+      width: 100%;
+      aspect-ratio: 9/16;
+      object-fit: cover;
+      background: #000;
+      display: block;
+    }
+
+    .clip-body { padding: 14px; }
+
+    .clip-badge {
+      display: inline-block;
+      padding: 3px 9px;
+      background: rgba(255,77,28,0.18);
+      color: var(--accent2);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 9px;
+    }
+
+    .clip-preview {
+      font-size: 12px;
+      color: var(--dim);
+      line-height: 1.55;
+      direction: rtl;
+      text-align: right;
+      margin-bottom: 12px;
+      min-height: 36px;
+    }
+
+    .dl-btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      background: rgba(255,77,28,0.12);
+      border: 1px solid rgba(255,77,28,0.28);
+      border-radius: 8px;
+      color: var(--accent2);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.18s;
+    }
+    .dl-btn:hover { background: rgba(255,77,28,0.22); }
+
+    .reset-wrap {
+      text-align: center;
+      margin-top: 36px;
+    }
+    .reset-btn {
+      padding: 13px 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .reset-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 28px var(--glow);
+    }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 580px) {
+      main { padding: 32px 16px 60px; }
+      .hero h1 { font-size: 30px; }
+      .results-grid { grid-template-columns: 1fr 1fr; }
+      .card { padding: 22px 18px; }
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────────────── -->
+<header>
+  <div class="logo">Maqta3</div>
+  <div class="logo-sub">مقطع · Arabic Reels Generator</div>
+</header>
+
+<!-- ─── Main ───────────────────────────────────── -->
+<main>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Turn Any Video Into<br><span>Arabic Reels</span></h1>
+    <p>Auto-extract highlights · Vertical 9:16 format · Burned-in Arabic subtitles<br>English → Arabic voiceover (Saudi dialect)</p>
+    <div class="feature-pills">
+      <span class="pill">🎙 Whisper Transcription</span>
+      <span class="pill">✂️ Smart Highlight Scoring</span>
+      <span class="pill">🇸🇦 Saudi TTS</span>
+      <span class="pill">📱 9:16 Output</span>
+    </div>
+  </div>
+
+  <!-- Input Card -->
+  <div class="card" id="input-section">
+
+    <!-- Tabs -->
+    <div class="tab-group">
+      <button class="tab-btn active" id="tab-url"    onclick="switchTab('url')">🔗  YouTube URL</button>
+      <button class="tab-btn"        id="tab-upload" onclick="switchTab('upload')">📁  Upload Video</button>
+    </div>
+
+    <!-- URL panel -->
+    <div id="panel-url">
+      <input type="text" class="input-field" id="yt-url"
+             placeholder="https://www.youtube.com/watch?v=..."
+             autocomplete="off" spellcheck="false">
+    </div>
+
+    <!-- Upload panel -->
+    <div id="panel-upload" class="hidden">
+      <div class="drop-zone" id="drop-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="drop-icon">🎬</div>
+        <p><strong>Click to choose a file</strong> or drag & drop here</p>
+        <p>MP4 · MOV · AVI &nbsp;|&nbsp; Max 30 min</p>
+      </div>
+      <input type="file" id="file-input" accept="video/*" onchange="onFileSelect(event)">
+      <div id="file-name"></div>
+    </div>
+
+    <!-- Clip count picker -->
+    <div class="clip-picker">
+      <div class="clip-picker-label">Number of highlights</div>
+      <div class="clip-picker-btns">
+        <button class="clip-btn" onclick="selectClips(1)">1</button>
+        <button class="clip-btn" onclick="selectClips(2)">2</button>
+        <button class="clip-btn" onclick="selectClips(3)">3</button>
+        <button class="clip-btn" onclick="selectClips(4)">4</button>
+        <button class="clip-btn selected" onclick="selectClips(5)">5</button>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <button class="submit-btn" id="submit-btn" onclick="submitJob()">
+      ✦ &nbsp; Generate Arabic Highlights
+    </button>
+    <p class="processing-note">Processing takes 3–8 minutes · First run downloads AI models (~2 GB)</p>
+  </div>
+
+  <!-- Status Card -->
+  <div class="card" id="status-section">
+    <div class="section-title" id="status-title">Processing…</div>
+
+    <div class="progress-track">
+      <div class="progress-fill" id="prog-bar"></div>
+    </div>
+
+    <div class="stage-list" id="stage-list"></div>
+    <div class="error-box" id="err-box"></div>
+  </div>
+
+  <!-- Results -->
+  <div id="results-section">
+    <div class="section-title">
+      Highlights Ready
+      <span class="count-badge" id="clip-count">0</span>
+    </div>
+    <div class="results-grid" id="results-grid"></div>
+    <div class="reset-wrap">
+      <button class="reset-btn" onclick="resetUI()">+ Process Another Video</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ─── JavaScript ──────────────────────────────── -->
+<script>
+  /* ── State ─────────────────────────────── */
+  let activeTab = 'url';
+  let uploadedFile = null;
+  let jobId = null;
+  let pollTimer = null;
+  let selectedClips = 5;
+
+  function selectClips(n) {
+    selectedClips = n;
+    document.querySelectorAll('.clip-btn').forEach((btn, i) => {
+      btn.classList.toggle('selected', i + 1 === n);
+    });
+  }
+
+  /* ── Pipeline stages (ordered) ─────────── */
+  const STAGES = [
+    { id: 'downloading',  label: 'Downloading video' },
+    { id: 'extracting',   label: 'Extracting audio track' },
+    { id: 'transcribing', label: 'Transcribing speech  (Whisper AI)' },
+    { id: 'scoring',      label: 'Scoring highlight candidates' },
+    { id: 'clipping',     label: 'Cutting clips' },
+    { id: 'converting',   label: 'Converting to vertical 9:16' },
+    { id: 'subtitling',   label: 'Burning Arabic subtitles' },
+    { id: 'tts',          label: 'Generating Arabic voiceover' },
+    { id: 'done',         label: 'Finalising output' },
+  ];
+
+  /* ── Tab switching ──────────────────────── */
+  function switchTab(tab) {
+    activeTab = tab;
+    document.getElementById('tab-url').classList.toggle('active', tab === 'url');
+    document.getElementById('tab-upload').classList.toggle('active', tab === 'upload');
+    document.getElementById('panel-url').classList.toggle('hidden', tab !== 'url');
+    document.getElementById('panel-upload').classList.toggle('hidden', tab !== 'upload');
+  }
+
+  /* ── File handling ──────────────────────── */
+  function setFile(file) {
+    uploadedFile = file;
+    const el = document.getElementById('file-name');
+    el.style.display = 'block';
+    el.textContent = `✓  ${file.name}  (${(file.size / 1048576).toFixed(1)} MB)`;
+  }
+
+  function onFileSelect(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.add('active');
+  }
+  function onDragLeave(e) {
+    document.getElementById('drop-zone').classList.remove('active');
+  }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('active');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('video/')) setFile(f);
+  }
+
+  /* ── Submit ─────────────────────────────── */
+  async function submitJob() {
+    const fd = new FormData();
+    fd.append('num_highlights', selectedClips);
+
+    if (activeTab === 'url') {
+      const url = document.getElementById('yt-url').value.trim();
+      if (!url) { alert('Please enter a YouTube URL.'); return; }
+      if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
+        alert('Only YouTube URLs are supported.'); return;
+      }
+      fd.append('url', url);
+    } else {
+      if (!uploadedFile) { alert('Please select a video file.'); return; }
+      fd.append('file', uploadedFile);
+    }
+
+    showStatus();
+    renderStages(null);
+
+    try {
+      const res = await fetch('/api/jobs', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      jobId = data.job_id;
+      pollTimer = setInterval(poll, 2500);
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  /* ── Poll ───────────────────────────────── */
+  async function poll() {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      const data = await res.json();
+      updateProgress(data);
+      if (data.status === 'done')  { clearInterval(pollTimer); showResults(data.results); }
+      if (data.status === 'error') { clearInterval(pollTimer); showError(data.error || 'Unknown error'); }
+    } catch (e) {
+      /* keep polling on transient network errors */
+    }
+  }
+
+  /* ── UI helpers ─────────────────────────── */
+  function showStatus() {
+    document.getElementById('input-section').style.display = 'none';
+    document.getElementById('status-section').style.display = 'block';
+    document.getElementById('results-section').style.display = 'none';
+    document.getElementById('err-box').style.display = 'none';
+  }
+
+  function updateProgress(data) {
+    document.getElementById('prog-bar').style.width = (data.progress || 0) + '%';
+    document.getElementById('status-title').textContent = data.message || 'Processing…';
+    renderStages(data.stage);
+  }
+
+  function renderStages(active) {
+    const idx = STAGES.findIndex(s => s.id === active);
+    document.getElementById('stage-list').innerHTML = STAGES.map((s, i) => {
+      let cls = '', dot = '○';
+      if (idx >= 0) {
+        if (i < idx)  { cls = 's-done';   dot = '✓'; }
+        if (i === idx){ cls = 's-active'; dot = '●'; }
+      }
+      return `<div class="stage-row ${cls}">
+        <div class="stage-dot">${dot}</div>
+        <div class="stage-label">${s.label}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('err-box');
+    el.textContent = '⚠  ' + msg;
+    el.style.display = 'block';
+    document.getElementById('status-title').textContent = 'Processing failed';
+    setTimeout(() => {
+      clearInterval(pollTimer);
+      document.getElementById('input-section').style.display = 'block';
+      document.getElementById('status-section').style.display = 'none';
+    }, 4000);
+  }
+
+  function showResults(clips) {
+    document.getElementById('status-section').style.display = 'none';
+    document.getElementById('results-section').style.display = 'block';
+    document.getElementById('clip-count').textContent = clips.length;
+
+    document.getElementById('results-grid').innerHTML = clips.map((c, i) => `
+      <div class="clip-card">
+        <video class="clip-video" controls playsinline preload="metadata">
+          <source src="/api/results/${jobId}/${c.filename}" type="video/mp4">
+        </video>
+        <div class="clip-body">
+          <span class="clip-badge">Clip ${i + 1} · ${fmtDur(c.duration)}</span>
+          <p class="clip-preview">${c.arabic_preview || ''}</p>
+          <a class="dl-btn" href="/api/results/${jobId}/${c.filename}" download>
+            ⬇ &nbsp; Download Clip ${i + 1}
+          </a>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function fmtDur(sec) {
+    const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  function resetUI() {
+    clearInterval(pollTimer);
+    jobId = null; uploadedFile = null;
+    document.getElementById('yt-url').value = '';
+    document.getElementById('file-name').style.display = 'none';
+    document.getElementById('file-input').value = '';
+    document.getElementById('results-grid').innerHTML = '';
+    document.getElementById('prog-bar').style.width = '0%';
+    document.getElementById('err-box').style.display = 'none';
+    document.getElementById('input-section').style.display = 'block';
+    document.getElementById('status-section').style.display = 'none';
+    document.getElementById('results-section').style.display = 'none';
+  }
+</script>
+
+</body>
+</html>

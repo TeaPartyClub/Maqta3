@@ -1,0 +1,38 @@
+# ── Web server ──────────────────────────────────────────
+fastapi
+uvicorn[standard]
+python-multipart
+aiofiles
+
+# ── Video download ───────────────────────────────────────
+yt-dlp
+
+# ── Speech transcription (Whisper) ──────────────────────
+# Also pulls in torch; use openai-whisper for the official package
+openai-whisper
+
+# ── Machine translation EN→AR  (Helsinki-NLP/opus-mt-en-ar)
+# ── Arabic TTS              (AhmedEladl/saudi-tts — VITS)
+transformers
+sentencepiece        # required by MarianMT tokenizer
+sacremoses           # required by MarianMT tokenizer
+protobuf             # required by TTS model tokenizer
+tiktoken             # required by TTS tokenizer fast backend
+
+# ── Deep-learning runtime ────────────────────────────────
+# For GPU support replace with the CUDA wheel from pytorch.org
+torch
+torchaudio
+
+# ── Audio I/O ────────────────────────────────────────────
+soundfile
+numpy
+
+# NOTE: FFmpeg and yt-dlp CLI binaries must be installed separately.
+# Windows : winget install Gyan.FFmpeg  && winget install yt-dlp.yt-dlp
+# Ubuntu  : sudo apt install ffmpeg     && pip install yt-dlp
+# macOS   : brew install ffmpeg         && brew install yt-dlp
+#
+# Arabic font for subtitles (optional, improves rendering):
+# Ubuntu  : sudo apt install fonts-noto-core fonts-arabeyes
+# Windows : "Noto Naskh Arabic" or "Arabic Typesetting" is usually pre-installed
