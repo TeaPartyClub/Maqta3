@@ -21,6 +21,7 @@
     { id: 'clipping',     label: 'Cutting clips' },
     { id: 'converting',   label: 'Converting to vertical 9:16' },
     { id: 'subtitling',   label: 'Burning Arabic subtitles' },
+    { id: 'dialect',      label: 'Rewriting to Saudi dialect' },
     { id: 'tts',          label: 'Generating Arabic voiceover' },
     { id: 'done',         label: 'Finalising output' },
   ];

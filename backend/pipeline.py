@@ -4,25 +4,36 @@ Maqta3 — Video Processing Pipeline
 Handles:
   1. Video download (yt-dlp) or local file passthrough
   2. Audio extraction (FFmpeg)
-  3. Speech transcription + language detection (Whisper)
+  3. Speech transcription + language detection (Whisper / youtube-transcript-api)
   4. Highlight extraction using heuristic scoring
   5. Vertical 9:16 center-crop (FFmpeg)
   6. Arabic subtitle generation via translation (Helsinki-NLP/opus-mt-en-ar)
-  7. Subtitle burning into video (FFmpeg ASS filter)
-  8. Arabic TTS audio replacement (AhmedEladl/saudi-tts) — English input only
+  7. Saudi dialect rewrite via LLM (Anthropic Claude) — converts MSA → Saudi colloquial
+  8. Subtitle burning into video (FFmpeg ASS filter)
+  9. Arabic TTS audio replacement (Coqui XTTSv2, auto-downloaded; voice-cloned from dataset WAVs)
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import shutil
 import subprocess
 import tempfile
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Callable, List, Optional
+
+log = logging.getLogger("maqta3")
+
+# ─── Speaker reference for XTTSv2 voice cloning ───────────────────────────────
+# XTTSv2 is downloaded automatically via the TTS package on first use.
+# The dataset WAVs are used as the speaker reference (voice cloning).
+_BACKEND_DIR     = Path(__file__).parent
+_XTTS_WAV_DIR    = _BACKEND_DIR / "dataset" / "dataset" / "wavs"
 
 import numpy as np
 import requests
@@ -98,19 +109,21 @@ class VideoProcessor:
     """
 
     def __init__(self):
-        self._whisper          = None
-        self._mt_tokenizer     = None
-        self._mt_model         = None
-        self._tts_tokenizer    = None
-        self._tts_model        = None
+        self._whisper           = None
+        self._mt_tokenizer      = None
+        self._mt_model          = None
+        self._llm_client        = None
+        self._xtts_model        = None   # TTS.api.TTS instance
 
     # ── Lazy loaders ─────────────────────────────────────────────────────────
 
     def _load_whisper(self):
         if self._whisper is None:
             import whisper
-            # "base" balances speed and accuracy well for MVP
+            log.info("Loading Whisper 'base' model…")
+            t0 = time.time()
             self._whisper = whisper.load_model("base")
+            log.info("Whisper loaded in %.1fs", time.time() - t0)
         return self._whisper
 
     def _load_mt(self):
@@ -118,21 +131,60 @@ class VideoProcessor:
         if self._mt_model is None:
             from transformers import MarianMTModel, MarianTokenizer
             name = "Helsinki-NLP/opus-mt-en-ar"
+            log.info("Loading Helsinki-NLP MT model (%s)…", name)
+            t0 = time.time()
             self._mt_tokenizer = MarianTokenizer.from_pretrained(name)
             self._mt_model     = MarianMTModel.from_pretrained(name)
+            log.info("MT model loaded in %.1fs", time.time() - t0)
         return self._mt_tokenizer, self._mt_model
 
-    def _load_tts(self):
-        """Saudi-dialect TTS (NAMAA-Saudi-TTS).
-        Using the Gradio client since local chatterbox setup is complex on Windows.
+    def _load_llm(self):
+        """Anthropic Claude client for Saudi dialect rewriting.
+        Requires ANTHROPIC_API_KEY environment variable.
         """
-        if self._tts_model is None:
-            try:
-                from gradio_client import Client
-                self._tts_model = Client("omarelshehy/NAMAA-Saudi-Voice")
-            except Exception as e:
-                print(f"Failed to load Gradio client for NAMAA TTS: {e}")
-        return None, self._tts_model
+        if self._llm_client is not None:
+            return None if self._llm_client == "disabled" else self._llm_client
+
+        import anthropic
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            log.warning("ANTHROPIC_API_KEY not set — Saudi dialect rewrite will be skipped")
+            self._llm_client = "disabled"
+            return None
+        self._llm_client = anthropic.Anthropic(api_key=api_key)
+        log.info("Anthropic client ready")
+        return self._llm_client
+
+    def _load_xtts(self):
+        """Download (once) and return the XTTSv2 TTS instance.
+        The model is cached by the TTS package in ~/.local/share/tts/ on first run.
+        """
+        if self._xtts_model is not None:
+            return self._xtts_model
+
+        import torch
+
+        # Auto-accept Coqui license so the server doesn't block on an interactive prompt
+        os.environ.setdefault("COQUI_TOS_AGREED", "1")
+
+        # Compatibility shim: transformers ≥4.41 removed isin_mps_friendly but
+        # coqui-tts 0.28.x still imports it from transformers.pytorch_utils.
+        try:
+            from transformers.pytorch_utils import isin_mps_friendly  # noqa: F401
+        except ImportError:
+            import transformers.pytorch_utils as _pt_utils
+            _pt_utils.isin_mps_friendly = lambda elements, test_elements: torch.isin(
+                elements, test_elements
+            )
+
+        from TTS.api import TTS
+
+        gpu = torch.cuda.is_available()
+        log.info("Loading XTTSv2 model (gpu=%s) — first run downloads ~1.8 GB…", gpu)
+        t0 = time.time()
+        self._xtts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=gpu)
+        log.info("XTTSv2 ready in %.1fs", time.time() - t0)
+        return self._xtts_model
 
     # ── Public entry point ────────────────────────────────────────────────────
 
@@ -147,33 +199,48 @@ class VideoProcessor:
     ) -> List[dict]:
 
         work = Path(result_dir)
+        log.info("=== Job %s started (url=%s, clips=%d) ===",
+                 job_id, source_url or "upload", num_highlights)
+        job_t0 = time.time()
 
         # 1 ── Obtain video file
         progress_callback("downloading", 5, "Downloading video…")
+        log.info("[1/9] Downloading video…")
         video = self._get_video(source_url, source_path, work)
 
         video_id = self._extract_video_id(source_url)
         skip_segments = []
         if video_id:
             skip_segments = self._get_sponsorblock_segments(video_id)
+            if skip_segments:
+                log.info("SponsorBlock: skipping %d segment(s)", len(skip_segments))
 
         # Get total duration
         total_dur = self._duration(video)
+        log.info("Video duration: %.1fs", total_dur)
 
         transcript = None
         if video_id:
             progress_callback("transcribing", 15, "Fetching YouTube subtitles…")
+            log.info("[2/9] Trying YouTube transcript API…")
             transcript = self._get_youtube_transcript(video_id)
+            if transcript:
+                log.info("YouTube transcript fetched (%d segments, lang=%s)",
+                         len(transcript.get("segments", [])),
+                         transcript.get("language", "?"))
 
         if not transcript:
-            # 2 ── Extract mono 16 kHz audio for Whisper
             progress_callback("extracting", 12, "Extracting audio…")
+            log.info("[2/9] Extracting audio for Whisper…")
             audio = self._extract_audio(video, work)
 
-            # 4 ── Transcribe + detect language
             progress_callback("transcribing", 18,
                               "Transcribing speech… (1–3 min depending on length)")
+            log.info("[3/9] Transcribing with Whisper (this takes a while)…")
+            t0 = time.time()
             transcript = self._transcribe(audio)
+            log.info("Whisper transcription done in %.1fs — detected language: %s",
+                     time.time() - t0, transcript.get("language", "?"))
 
         language   = transcript.get("language", "en")
         raw_segments = transcript.get("segments", [])
@@ -187,6 +254,10 @@ class VideoProcessor:
             if not is_sponsored and s.get("text", "").strip():
                 segments.append(s)
 
+        skipped = len(raw_segments) - len(segments)
+        log.info("Segments after filtering: %d usable, %d skipped (sponsored/empty)",
+                 len(segments), skipped)
+
         if not segments:
             raise ValueError(
                 "No valid speech segments found in this video. "
@@ -195,6 +266,7 @@ class VideoProcessor:
 
         # 5 ── Highlight scoring
         progress_callback("scoring", 55, "Scoring highlight candidates…")
+        log.info("[4/9] Scoring highlight candidates…")
         highlights = self._extract_highlights(segments, total_dur, num_highlights)
 
         if not highlights:
@@ -203,15 +275,25 @@ class VideoProcessor:
                 "The video may be too short or consist mostly of silence."
             )
 
+        log.info("Selected %d highlight(s):", len(highlights))
+        for idx, hl in enumerate(highlights):
+            log.info("  Clip %d: %.1fs – %.1fs (%.1fs, score=%.1f)",
+                     idx + 1, hl["start"], hl["end"],
+                     hl["end"] - hl["start"], hl["score"])
+
         results = []
         n = len(highlights)
 
         for i, hl in enumerate(highlights):
             base = 58 + int(i / n * 38)
+            clip_t0 = time.time()
+            log.info("── Clip %d/%d ──────────────────────────────", i + 1, n)
 
             # 6 ── Trim raw clip (Silence Removal Jumpcut)
             progress_callback("clipping", base,
                               f"Cutting and jump-cutting clip {i+1}/{n}…")
+            log.info("[5/9] Jump-cutting clip %d (%d segments)…",
+                     i + 1, len(hl["segments"]))
             raw_clip = work / f"_raw_{i}.mp4"
             retimed_segs = self._trim_jumpcut(video, hl["segments"], raw_clip)
             hl["segments"] = retimed_segs
@@ -220,13 +302,27 @@ class VideoProcessor:
             # 7 ── Convert to 9:16
             progress_callback("converting", base + 1,
                               f"Converting clip {i+1} to vertical…")
+            log.info("[6/9] Converting clip %d to vertical 9:16…", i + 1)
             vert_clip = work / f"_vert_{i}.mp4"
             self._make_vertical(raw_clip, vert_clip)
 
-            # 8 ── Translate subtitle segments to Arabic
+            # 8 ── Translate subtitle segments to Arabic (Helsinki-NLP MSA)
             progress_callback("subtitling", base + 2,
                               f"Generating Arabic subtitles for clip {i+1}…")
+            log.info("[7/9] Translating %d segment(s) to Arabic…",
+                     len(hl["segments"]))
+            t0 = time.time()
             ar_segs = self._translate_segments(hl["segments"], language)
+            log.info("Translation done in %.1fs", time.time() - t0)
+
+            # 8b ── Rewrite Arabic to Saudi colloquial dialect via LLM
+            progress_callback("dialect", base + 3,
+                              f"Rewriting to Saudi dialect for clip {i+1}…")
+            log.info("[8/9] Rewriting %d segment(s) to Saudi dialect via LLM…",
+                     len(ar_segs))
+            t0 = time.time()
+            ar_segs = self._dialectify_segments(ar_segs)
+            log.info("Dialect rewrite done in %.1fs", time.time() - t0)
 
             # 9 ── Write ASS file
             ass_file = work / f"_subs_{i}.ass"
@@ -242,13 +338,18 @@ class VideoProcessor:
             if language == "en":
                 progress_callback("tts", base + 4,
                                   f"Generating Arabic voiceover for clip {i+1}…")
+                log.info("[9/9] Synthesising voiceover for clip %d (%d segment(s))…",
+                         i + 1, len(ar_segs))
+                t0 = time.time()
                 try:
                     tts_clip = work / f"_tts_{i}.mp4"
                     self._replace_audio_tts(sub_clip, ar_segs,
                                             clip_start, tts_clip)
                     final = tts_clip
+                    log.info("TTS done in %.1fs", time.time() - t0)
                 except Exception as exc:
-                    print(f"[TTS] Clip {i+1} skipped: {exc}")
+                    log.error("TTS failed for clip %d, keeping subtitles-only: %s",
+                              i + 1, exc)
 
             # Move to permanent name
             final_name = f"highlight_{i+1}.mp4"
@@ -265,6 +366,10 @@ class VideoProcessor:
                 s.get("arabic", "") for s in ar_segs[:3]
             )[:150]
 
+            size_mb = final_path.stat().st_size / 1_048_576
+            log.info("Clip %d done in %.1fs → %s (%.1f MB)",
+                     i + 1, time.time() - clip_t0, final_name, size_mb)
+
             results.append({
                 "clip_index":    i + 1,
                 "filename":      final_name,
@@ -274,6 +379,8 @@ class VideoProcessor:
                 "arabic_preview": arabic_preview,
             })
 
+        log.info("=== Job %s complete — %d clip(s) in %.1fs ===",
+                 job_id, len(results), time.time() - job_t0)
         return results
 
     # ── Step implementations ──────────────────────────────────────────────────
@@ -350,36 +457,44 @@ class VideoProcessor:
                 data = resp.json()
                 return [(seg["segment"][0], seg["segment"][1]) for seg in data]
         except Exception as e:
-            print(f"SponsorBlock error: {e}")
+            log.warning("SponsorBlock lookup failed: %s", e)
         return []
 
     def _get_youtube_transcript(self, video_id: str) -> Optional[dict]:
         if YouTubeTranscriptApi is None:
             return None
         try:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            # youtube-transcript-api v1.x uses instance-based API
+            api = YouTubeTranscriptApi()
+            transcript_list = api.list(video_id)
             try:
                 transcript = transcript_list.find_transcript(['en', 'ar'])
-            except:
-                transcript = transcript_list.find_transcript([t.language_code for t in transcript_list])
-            
+            except Exception:
+                transcript = transcript_list.find_transcript(
+                    [t.language_code for t in transcript_list]
+                )
+
             raw_transcript = transcript.fetch()
             language = transcript.language_code
-            
+
             segments = []
             for item in raw_transcript:
+                # v1.x items expose attributes; fall back to dict access for older builds
+                start    = getattr(item, "start",    None) or item["start"]
+                duration = getattr(item, "duration", None) or item["duration"]
+                text     = getattr(item, "text",     None) or item["text"]
                 segments.append({
-                    "start": item["start"],
-                    "end": item["start"] + item["duration"],
-                    "text": item["text"]
+                    "start": start,
+                    "end":   start + duration,
+                    "text":  text,
                 })
-                
+
             return {
                 "language": "en" if "en" in language else ("ar" if "ar" in language else language),
-                "segments": segments
+                "segments": segments,
             }
         except Exception as e:
-            print(f"YouTube transcript error: {e}")
+            log.warning("YouTube transcript unavailable (%s) — falling back to Whisper", e)
             return None
 
     # ── Highlight extraction ──────────────────────────────────────────────────
@@ -590,6 +705,73 @@ class VideoProcessor:
             for s, ar in zip(segments, arabic_texts)
         ]
 
+    def _to_saudi_dialect(self, texts: list) -> list:
+        """
+        Batch-rewrite Arabic texts into natural Saudi colloquial dialect via LLM.
+        Sends all texts in a single API call as a JSON array; falls back to the
+        original texts if the API key is missing or the call fails.
+        """
+        client = self._load_llm()
+        if client is None:
+            return texts
+
+        serialized = json.dumps(texts, ensure_ascii=False)
+        prompt = (
+            "أنت متخصص في اللهجة السعودية العامية المحكية.\n"
+            "أعد كتابة كل نص في المصفوفة التالية باللهجة السعودية اليومية الطبيعية.\n\n"
+            "قواعد صارمة:\n"
+            "- استخدم العامية السعودية الحجازية أو النجدية (مثل: وش، الحين، ابغى، زين، وايد، عشان، بس، كذا، يعني، ايش، ما في)\n"
+            "- تجنّب الفصحى وأي مصطلحات رسمية تماماً\n"
+            "- حافظ على نفس المعنى والمحتوى بالضبط\n"
+            "- أعد فقط مصفوفة JSON من النصوص المُعادة الصياغة، بنفس الترتيب والطول\n"
+            "- لا تضف أي شرح أو نص خارج المصفوفة\n\n"
+            f"المدخل:\n{serialized}\n\n"
+            "المخرج (مصفوفة JSON فقط):"
+        )
+
+        try:
+            message = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = message.content[0].text.strip()
+            # Strip markdown code fences if the model wraps the output
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            rewritten = json.loads(raw.strip())
+            if isinstance(rewritten, list) and len(rewritten) == len(texts):
+                return [r if isinstance(r, str) and r.strip() else t
+                        for r, t in zip(rewritten, texts)]
+            log.warning("Dialect LLM returned unexpected shape (got %s items, expected %s) — using original Arabic",
+                        len(rewritten) if isinstance(rewritten, list) else type(rewritten).__name__,
+                        len(texts))
+            return texts
+        except Exception as exc:
+            log.error("Dialect LLM call failed: %s — using original Arabic", exc)
+            return texts
+
+    def _dialectify_segments(self, ar_segs: list) -> list:
+        """
+        Apply Saudi dialect rewriting to the 'arabic' field of each segment in-place.
+        Segments with empty arabic text are left unchanged.
+        """
+        texts   = [s.get("arabic", "").strip() for s in ar_segs]
+        non_empty_indices = [i for i, t in enumerate(texts) if t]
+        non_empty_texts   = [texts[i] for i in non_empty_indices]
+
+        if not non_empty_texts:
+            return ar_segs
+
+        rewritten = self._to_saudi_dialect(non_empty_texts)
+
+        result = [dict(s) for s in ar_segs]
+        for idx, rewritten_text in zip(non_empty_indices, rewritten):
+            result[idx]["arabic"] = rewritten_text
+        return result
+
     def _write_ass(
         self,
         segments:   list,
@@ -645,23 +827,27 @@ class VideoProcessor:
         output:     Path,
     ):
         """
-        Generate Arabic speech for each segment, build a time-aligned
-        audio track, and replace the original video audio.
+        Synthesise Saudi-dialect Arabic speech for each segment using the local
+        fine-tuned XTTSv2 model, build a time-aligned audio track, and replace
+        the original video audio.
 
         Alignment strategy:
-          • Each TTS utterance is placed at the segment's original start time.
+          • Each TTS utterance is placed at the segment's start time.
           • If TTS audio is longer than the segment window → truncate.
-          • Gaps between segments stay silent (no background music for MVP).
+          • Gaps between segments stay silent.
         """
-        tokenizer, client = self._load_tts()
-        
-        if client is None:
-            print("[TTS] NAMAA-Saudi-TTS client not available. Skipping.")
-            return
+        tts = self._load_xtts()
 
+        # Use the first dataset WAV as the cloning reference voice
+        speaker_ref = next(_XTTS_WAV_DIR.glob("*.wav"), None) if _XTTS_WAV_DIR.exists() else None
+        if speaker_ref is None:
+            raise FileNotFoundError(
+                "No speaker reference WAV found in backend/dataset/dataset/wavs/.\n"
+                "Ensure the dataset WAV files are present for voice cloning."
+            )
+
+        sample_rate = 24000   # XTTSv2 native output rate
         clip_dur    = self._duration(video)
-        # Assuming 24kHz for NAMAA-Saudi-TTS based on Chatterbox
-        sample_rate = 24000
         n_samples   = int((clip_dur + 0.5) * sample_rate)
         full_audio  = np.zeros(n_samples, dtype=np.float32)
 
@@ -677,59 +863,23 @@ class VideoProcessor:
             start_idx   = int(t0 * sample_rate)
 
             try:
-                # Call the NAMAA HF Space API with retries for rate limiting
-                # Endpoint: /generate_tts_audio
-                # Parameters: text, audio_prompt (None), exaggeration (0.5), temp (0.8), seed (0), cfgw (0.5)
-                import time
-                
-                result = None
-                for attempt in range(3):
-                    try:
-                        result = client.predict(
-                            text_input=arabic,
-                            audio_prompt_path_input=None,
-                            exaggeration_input=0.5,
-                            temperature_input=0.8,
-                            seed_num_input=0,
-                            cfgw_input=0.5,
-                            api_name="/generate_tts_audio"
-                        )
-                        break
-                    except Exception as e:
-                        if "429" in str(e) or "rate limit" in str(e).lower() or "Queue" in str(e):
-                            print(f"[TTS] Rate limited on attempt {attempt+1}, waiting 10s...")
-                            time.sleep(10)
-                        else:
-                            raise e
-                            
-                if not result:
-                    continue
-                
-                # Load the returned wav file
-                wave, sr = sf.read(result)
-                
-                # Resample if needed (sf handles basic loading, scipy/librosa for resample)
-                # But since we just initialized n_samples assuming 24k, we'll assign directly.
-                if sr != sample_rate:
-                    # In a production app you'd resample properly here.
-                    pass
-
-                # If stereo, convert to mono
-                if len(wave.shape) > 1:
-                    wave = wave.mean(axis=1)
+                wav_list = tts.tts(
+                    text=arabic,
+                    speaker_wav=str(speaker_ref),
+                    language="ar",
+                )
+                wave = np.array(wav_list, dtype=np.float32)
 
                 if len(wave) > seg_samples:
                     wave = wave[:seg_samples]
 
                 end_idx = min(start_idx + len(wave), n_samples)
-                full_audio[start_idx:end_idx] = wave[: end_idx - start_idx]
+                full_audio[start_idx:end_idx] = wave[:end_idx - start_idx]
 
             except Exception as exc:
-                print(f"[TTS] Segment skipped ({arabic[:30]}…): {exc}")
+                log.warning("TTS segment skipped [%.30s…]: %s", arabic, exc)
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".wav", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp_wav = tmp.name
 
         sf.write(tmp_wav, full_audio, sample_rate)

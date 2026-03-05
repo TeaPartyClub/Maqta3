@@ -14,13 +14,17 @@ requests
 openai-whisper
 
 # ── Machine translation EN→AR  (Helsinki-NLP/opus-mt-en-ar)
-# ── Arabic TTS              (NAMAA-Saudi-TTS via HuggingFace Space)
 transformers
 sentencepiece        # required by MarianMT tokenizer
 sacremoses           # required by MarianMT tokenizer
-gradio_client        # required for NAMAA TTS API calls
-protobuf             # required by TTS model tokenizer
-tiktoken             # required by TTS tokenizer fast backend
+
+# ── Saudi dialect rewrite (Anthropic Claude) ─────────────
+# Set ANTHROPIC_API_KEY env var before running
+anthropic
+
+# ── Arabic TTS  (Coqui XTTSv2 — auto-downloaded on first run) ────────────────
+# Voice is cloned from the speaker WAVs in backend/dataset/dataset/wavs/
+coqui-tts[codec]
 
 # ── Deep-learning runtime ────────────────────────────────
 # For GPU support replace with the CUDA wheel from pytorch.org
@@ -39,3 +43,6 @@ numpy
 # Arabic font for subtitles (optional, improves rendering):
 # Ubuntu  : sudo apt install fonts-noto-core fonts-arabeyes
 # Windows : "Noto Naskh Arabic" or "Arabic Typesetting" is usually pre-installed
+#
+# XTTSv2 model is downloaded automatically on first TTS call (~1.8 GB).
+# Speaker WAVs in backend/dataset/dataset/wavs/ are used for voice cloning.

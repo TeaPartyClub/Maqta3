@@ -18,6 +18,7 @@ echo "Checking dependencies..."
 pip install -r requirements.txt --quiet
 
 export HF_TOKEN=***REMOVED-HF-TOKEN***
+export ANTHROPIC_API_KEY=***REMOVED-ANTHROPIC-KEY***
 
 echo ""
 echo "Starting Maqta3 server..."

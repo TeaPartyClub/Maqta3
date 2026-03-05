@@ -1,3 +1,5 @@
 backend/results/
 backend/jobs/
 backend/__pycache__
+backend/uploads
+backend/dataset

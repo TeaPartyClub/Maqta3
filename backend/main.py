@@ -9,10 +9,22 @@ Then open http://localhost:8000
 """
 
 import json
+import logging
 import traceback
 import uuid
 from pathlib import Path
 from typing import Optional
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+# Silence chatty third-party libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 import aiofiles
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
@@ -157,7 +169,7 @@ def _run_pipeline(
                   results  = results)
 
     except Exception as exc:
-        traceback.print_exc()
+        logging.getLogger("maqta3").error("Job %s failed: %s", job_id, exc, exc_info=True)
         patch_job(job_id,
                   status  = "error",
                   message = f"Error: {exc}",
