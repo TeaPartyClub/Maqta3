@@ -28,4 +28,4 @@ echo ""
 
 # Wait for server to be ready, then open browser
 (sleep 2 && open http://localhost:8000) &
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --no-access-log

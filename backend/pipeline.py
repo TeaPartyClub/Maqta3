@@ -33,7 +33,7 @@ log = logging.getLogger("maqta3")
 # XTTSv2 is downloaded automatically via the TTS package on first use.
 # The dataset WAVs are used as the speaker reference (voice cloning).
 _BACKEND_DIR     = Path(__file__).parent
-_XTTS_WAV_DIR    = _BACKEND_DIR / "dataset" / "dataset" / "wavs"
+_XTTS_WAV_DIR    = _BACKEND_DIR / "dataset" / "wavs"
 
 import numpy as np
 import requests
