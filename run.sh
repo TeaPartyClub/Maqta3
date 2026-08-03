@@ -1,5 +1,6 @@
 #!/bin/bash
-cd "$(dirname "$0")/backend"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT/backend"
 
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
@@ -17,8 +18,14 @@ FFMPEG_FULL="$(brew --prefix ffmpeg-full 2>/dev/null)/bin"
 echo "Checking dependencies..."
 pip install -r requirements.txt --quiet
 
-export HF_TOKEN=***REMOVED-HF-TOKEN***
-export ANTHROPIC_API_KEY=***REMOVED-ANTHROPIC-KEY***
+# Load API keys from the untracked .env file (see .env.example)
+if [ -f "$ROOT/.env" ]; then
+    set -a
+    . "$ROOT/.env"
+    set +a
+else
+    echo "Warning: $ROOT/.env not found — copy .env.example to .env and fill in your keys."
+fi
 
 echo ""
 echo "Starting Maqta3 server..."

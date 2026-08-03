@@ -3,4 +3,10 @@ backend/jobs/
 backend/__pycache__
 backend/uploads
 backend/dataset
+backend/.venv/
 .DS_Store
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example

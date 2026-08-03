@@ -1,12 +1,19 @@
 @echo off
 set PATH=C:\ffmpeg\bin;%PATH%
+set "ROOT=%~dp0"
 cd /d "%~dp0backend"
 
 echo Checking dependencies...
 pip install -r requirements.txt --quiet
 
-set HF_TOKEN=***REMOVED-HF-TOKEN***
-set ANTHROPIC_API_KEY=***REMOVED-ANTHROPIC-KEY***
+REM Load API keys from the untracked .env file (see .env.example)
+if exist "%ROOT%.env" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%a in ("%ROOT%.env") do (
+        if not "%%~a"=="" set "%%~a=%%~b"
+    )
+) else (
+    echo Warning: %ROOT%.env not found - copy .env.example to .env and fill in your keys.
+)
 
 echo.
 echo Starting Maqta3 server...
