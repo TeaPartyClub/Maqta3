@@ -5,6 +5,7 @@ backend/uploads
 backend/dataset
 backend/.venv/
 .DS_Store
+*.md
 
 # Secrets — never commit
 .env
