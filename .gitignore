@@ -2,10 +2,14 @@ backend/results/
 backend/jobs/
 backend/__pycache__
 backend/uploads
-backend/dataset
+backend/dataset/*
+!backend/dataset/wavs/
+backend/dataset/wavs/*
+!backend/dataset/wavs/.gitkeep
 backend/.venv/
 .DS_Store
 *.md
+!README.md
 
 # Secrets — never commit
 .env

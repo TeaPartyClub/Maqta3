@@ -842,7 +842,7 @@ class VideoProcessor:
         speaker_ref = next(_XTTS_WAV_DIR.glob("*.wav"), None) if _XTTS_WAV_DIR.exists() else None
         if speaker_ref is None:
             raise FileNotFoundError(
-                "No speaker reference WAV found in backend/dataset/dataset/wavs/.\n"
+                "No speaker reference WAV found in backend/dataset/wavs/.\n"
                 "Ensure the dataset WAV files are present for voice cloning."
             )
 

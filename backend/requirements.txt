@@ -23,7 +23,7 @@ sacremoses           # required by MarianMT tokenizer
 anthropic
 
 # ── Arabic TTS  (Coqui XTTSv2 — auto-downloaded on first run) ────────────────
-# Voice is cloned from the speaker WAVs in backend/dataset/dataset/wavs/
+# Voice is cloned from the speaker WAVs in backend/dataset/wavs/
 coqui-tts[codec]
 
 # ── Deep-learning runtime ────────────────────────────────
@@ -45,4 +45,4 @@ numpy
 # Windows : "Noto Naskh Arabic" or "Arabic Typesetting" is usually pre-installed
 #
 # XTTSv2 model is downloaded automatically on first TTS call (~1.8 GB).
-# Speaker WAVs in backend/dataset/dataset/wavs/ are used for voice cloning.
+# Speaker WAVs in backend/dataset/wavs/ are used for voice cloning.
